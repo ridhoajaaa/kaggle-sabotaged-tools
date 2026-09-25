@@ -77,6 +77,7 @@ Per model, catat dari dua tabel breakdown:
 | `pip install kaggle-benchmarks` gagal | Nyalakan Internet di Settings notebook |
 | Output task kosong di leaderboard | Pastikan sel `%choose sabotaged_tools_task` dijalankan SETELAH run |
 | Run berhenti di tengah | Jalankan ulang sel 2 (state racuan di-reset otomatis tiap run skenario) |
+| `VersionError: Protobuf Gencode/Runtime` saat import SDK | Sudah ditangani otomatis oleh sel 2 versi terbaru (upgrade protobuf lalu restart kernel sekali — jalankan ulang Run All setelahnya). Manual: `!pip install -q -U "protobuf>=5.29.6"` → Restart kernel → Run All |
 | Hasil aneh di satu skenario | Periksa tabel breakdown C1/C2/C3 — komponen memisahkan "salah jawab" vs "tidak sadar racun" vs "tidak verifikasi" |
 
 ## 9. Sebelum publikasi

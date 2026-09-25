@@ -66,16 +66,30 @@ def main() -> None:
     write_parts.append("}\n\nfor name, src in FILES.items():\n    (BASE / name).write_text(src, encoding='utf-8')\n\nprint('Paket sabotaged_tools tertulis ke', BASE)\n")
     cells.append(code_cell("".join(write_parts)))
 
-    # Sel 2: impor task (dengan guard instalasi SDK untuk run di luar Kaggle)
+    # Sel 2: impor task (guard SDK + konflik versi protobuf gencode/runtime)
     cells.append(
         code_cell(
-            "try:\n"
-            "    import kaggle_benchmarks  # noqa: F401\n"
-            "except ImportError:\n"
-            "    # Jalankan sel ini sekali jika SDK belum ada (mis. lokal).\n"
-            "    import sys\n"
-            "    !{sys.executable} -m pip install -q kaggle-benchmarks\n"
-            "    import kaggle_benchmarks  # noqa: F401\n\n"
+            "import sys\n\n"
+            "def _load_kbench() -> bool:\n"
+            "    try:\n"
+            "        import kaggle_benchmarks  # noqa: F401\n"
+            "        return True\n"
+            "    except Exception as exc:  # belum terpasang / protobuf mismatch\n"
+            "        print(f'kaggle-benchmarks belum siap ({type(exc).__name__}: {exc})')\n"
+            "        return False\n\n"
+            "if not _load_kbench():\n"
+            "    import subprocess\n"
+            "    # Upgrade runtime protobuf agar >= gencode yang dipakai SDK,\n"
+            "    # lalu pasang/perbarui SDK-nya.\n"
+            "    subprocess.run(\n"
+            "        [sys.executable, '-m', 'pip', 'install', '-q', '-U',\n"
+            "         'protobuf>=5.29.6', 'kaggle-benchmarks'],\n"
+            "        check=False,\n"
+            "    )\n"
+            "    print('Dependensi diperbarui. Kernel di-restart otomatis...')\n"
+            "    print('Setelah restart, jalankan ulang sel ini (Run All).')\n"
+            "    import os\n"
+            "    os.kill(os.getpid(), 9)  # restart kernel Kaggle\n\n"
             "import sys\n"
             "sys.path.insert(0, '/kaggle/working')\n\n"
             "from sabotaged_tools.kbench_tasks import (\n"
