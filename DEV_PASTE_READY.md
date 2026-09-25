@@ -1,3 +1,5 @@
+*This is a submission for the [Kaggle Benchmarking Challenge](https://dev.to/challenges/kaggle-2026-09-23).*
+
 Every day, agents book invoices, check inventory, and set compliance flags by *trusting* the tools they call. Almost every benchmark rewards that trust — give the model clean tools, grade the answer. I built the opposite: a benchmark where the tools quietly lie, and the question is whether the model **notices**.
 
 **Sabotaged Tools** is a 6-scenario, 36-point tool-use benchmark built on [Kaggle Benchmarks](https://www.kaggle.com/benchmarks). Business as usual on the surface: FX lookups, tax rates, paginated orders, inventory snapshots. Underneath, one tool per scenario is poisoned — and every poison carries a **readable signal in its own payload**. No hidden flags, no gotchas. A careful model can score a perfect 36. A trusting one fails convincingly.
@@ -68,7 +70,7 @@ Component-level, sabotaged world: detection **75%** (avg C2), verification behav
 
 ## My Benchmark
 
-👉 **[Kaggle Benchmark Task: sabotaged_tools_main](https://www.kaggle.com/benchmarks/tasks/idhoaf/sabotaged-tools-main)** — the platform-verified leaderboard shows the first result (Claude Haiku 4.5: 23.00/36). The run notebook (with the honest-world calibration control and seeded variants) is [here](https://www.kaggle.com/code/idhoaf/new-benchmark-task-cf266), with full per-run artifacts — every prompt, tool call, and assertion is recorded by the platform.
+👉 **[Kaggle Benchmark: Sabotaged Tools — leaderboard & results](https://www.kaggle.com/benchmarks/idhoaf/sabotaged-tools-do-agents-verify-their-tools)** — the platform-verified leaderboard shows the first result (Claude Haiku 4.5: 23.00/36). The underlying task page is [here](https://www.kaggle.com/benchmarks/tasks/idhoaf/sabotaged-tools-main), and the run notebook (with the honest-world calibration control and seeded variants) is [here](https://www.kaggle.com/code/idhoaf/new-benchmark-task-cf266) — every prompt, tool call, and assertion is recorded by the platform.
 
 The complete source is structured for audit on [GitHub](https://github.com/ridhoajaaa/kaggle-sabotaged-tools): `world.py` (deterministic simulated world + ground truth), `tools.py` (honest/poisoned implementations), `scoring.py` (C1/C2/C3), `tests/` (90-test cross-seed regression suite). Fair-poisoning invariants are machine-checked: the movement ledger always closes exactly at true stock, pallet and eaches reports are substantively identical, and the injection marker is present in every variant.
 
