@@ -47,6 +47,31 @@
 - Setelah selesai: halaman **Task Detail** menampilkan leaderboard run Anda.
   Salin URL-nya → `[FILL: kaggle benchmark URL]`.
 
+## 4b. Pola cepat: tarik paket langsung dari GitHub (anti basi)
+
+Daripada menyalin-ulang sel "tulis paket" setiap kali repo diperbarui, ganti sel itu
+ dengan sel berikut di notebook benchmark `benchmarks/tasks/new` Anda:
+
+```python
+import urllib.request, pathlib
+
+REV = "0f1ffc1"  # pin commit — naikkan bila repo diperbarui
+BASE = pathlib.Path("/kaggle/working/sabotaged_tools")
+BASE.mkdir(parents=True, exist_ok=True)
+FILES = ["__init__.py", "world.py", "tools.py", "ledger.py",
+         "schemas.py", "scoring.py", "kbench_tasks.py", "analyze.py"]
+for name in FILES:
+    url = (f"https://raw.githubusercontent.com/ridhoajaaa/kaggle-sabotaged-tools/"
+           f"{REV}/sabotaged_tools/{name}")
+    urllib.request.urlretrieve(url, BASE / name)
+    assert (BASE / name).stat().st_size > 500
+print("Paket tertarik dari GitHub @", REV)
+```
+
+Lalu: **Restart kernel → Run All** (restart wajib: modul lama ter-cache di kernel).
+Sel run tetap dari notebook kita; hasil run resmi tetap tervalidasi karena kode
+yang dipakai ter-pin ke commit yang jelas — cocok dikutip di postingan DEV.
+
 ## 5. Model kedua, ketiga, dst.
 Cara paling sederhana untuk run pertama: **ganti model default** (panel model → set
 sebagai default) → jalankan ulang sel 2 → catat tabel breakdown per model.
