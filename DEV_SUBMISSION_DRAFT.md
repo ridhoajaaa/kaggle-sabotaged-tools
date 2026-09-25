@@ -5,7 +5,7 @@
 > Sisa yang perlu Anda lakukan:
 > 1. (Opsional tapi disarankan) Run 2–3 model lain, kumpulkan ke `ALL_MODELS`, lalu tambah baris tabel SVI.
 > 2. Di notebook benchmark: jalankan sel `%choose sabotaged_tools_task` → **Save Version → Save & Run All** → salin URL Task Page.
-> 3. Tempel URL itu di bagian 🔗 My Benchmark (ganti `[FILL: kaggle benchmark URL]`) — **wajib** untuk eligibility.
+> 3. ✅ URL Kaggle sudah dipasang. SATU YANG TERSISA: ubah visibilitas notebook Kaggle ke **Public** (Settings → Visibility) supaya juri bisa membukanya.
 > 4. (Opsional) Buka transkrip run S1 (jujur) untuk anekdot kenapa C1=0 dengan data bersih — satu kutipan membuat artikel hidup.
 > 5. Tag wajib: `#kagglechallenge`. Deadline: **11 Okt 2026, 23:59 PDT**. Satu submission per peserta.
 
@@ -86,7 +86,7 @@ Component-level, sabotaged world: detection **75%** (avg C2), verification behav
 
 ## 🔗 My Benchmark
 
-👉 **[FILL: kaggle benchmark URL]** — includes the main task (`sabotaged_tools`, sabotaged world), the honest calibration control (`sabotaged_tools_calibration`), seeded variants, and full per-run artifacts (every prompt, tool call, and assertion is recorded by the platform).
+👉 **[Kaggle: New Benchmark Task cf266](https://www.kaggle.com/code/idhoat/new-benchmark-task-cf266/notebook?scriptVersionId=352793694)** — includes the main task (`sabotaged_tools`, sabotaged world), the honest calibration control (`sabotaged_tools_calibration`), seeded variants, and full per-run artifacts (every prompt, tool call, and assertion is recorded by the platform).
 
 The complete source is structured for audit: `world.py` (deterministic simulated world + ground truth), `tools.py` (honest/poisoned implementations), `scoring.py` (C1/C2/C3), `tests/` (90-test cross-seed regression suite). Fair-poisoning invariants are machine-checked: the movement ledger always closes exactly at true stock, pallet and eaches reports are substantively identical, and the injection marker is present in every variant.
 
