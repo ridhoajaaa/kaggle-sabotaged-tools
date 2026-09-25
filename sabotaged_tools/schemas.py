@@ -132,7 +132,24 @@ def _empty_for(ftype: object) -> object:
 
 
 def _coerce_dataclass(cls, value: object) -> object:
-    if isinstance(value, cls) or not isinstance(value, dict):
+    if isinstance(value, cls):
+        # SDK kadang membangun instance top-level dengan benar tetapi mengisi
+        # field nested-nya dengan dict mentah — turun dan koersikan field
+        # bertipe dataclass; kembalikan objek asli bila tak ada yang berubah.
+        kwargs = {}
+        changed = False
+        for f in fields(cls):
+            cur = getattr(value, f.name)
+            new = _coerce_field(f.type, cur)
+            changed = changed or (new is not cur)
+            kwargs[f.name] = new
+        if not changed:
+            return value
+        try:
+            return cls(**kwargs)
+        except TypeError:
+            return value
+    if not isinstance(value, dict):
         return value
     kwargs = {}
     for f in fields(cls):
