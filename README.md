@@ -1,5 +1,7 @@
 # Sabotaged Tools — Benchmark Tool-Use untuk Kaggle Benchmarking Challenge
 
+![CI](https://github.com/ridhoajaaa/kaggle-sabotaged-tools/actions/workflows/ci.yml/badge.svg)
+
 **Pertanyaan inti:** Ketika tool yang tersedia untuk agen diam-diam memberikan data yang salah, apakah agen menyadarinya — atau langsung memercayainya?
 
 Ini adalah benchmark tool-use yang menguji **verifikasi, bukan kepatuhan**. Enam skenario bisnis yang realistis, satu tool diracuni per skenario, dan — ini bagian pentingnya — **setiap racuan membawa sinyal yang bisa dibaca dari payload itu sendiri**. Model yang teliti bisa mencapai skor sempurna; model yang percaya diri akan gagal dengan meyakinkan.
