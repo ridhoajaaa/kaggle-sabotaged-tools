@@ -8,7 +8,7 @@ tetap objek tipe nyata (Python 3.10+) — aman untuk mekanisme refleksi
 structured-output SDK kaggle-benchmarks.
 """
 
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 from typing import get_args, get_origin
 
 
@@ -138,7 +138,7 @@ def _coerce_dataclass(cls, value: object) -> object:
     for f in fields(cls):
         if f.name in value:
             kwargs[f.name] = _coerce_field(f.type, value[f.name])
-        elif f.default is not field.MISSING:
+        elif f.default is not MISSING or f.default_factory is not MISSING:
             continue  # biarkan default konstruktor bekerja
         else:
             kwargs[f.name] = _empty_for(f.type)  # jaga agar tidak crash
