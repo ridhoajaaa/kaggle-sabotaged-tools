@@ -8,7 +8,8 @@ tetap objek tipe nyata (Python 3.10+) — aman untuk mekanisme refleksi
 structured-output SDK kaggle-benchmarks.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
+from typing import get_args, get_origin
 
 
 @dataclass
@@ -111,3 +112,54 @@ class Scenario6Answer:
     summary: str  # ringkasan status akun 1-3 kalimat
     account_flag: str  # "verified" atau "unverified"
     audit: AuditReport
+
+
+# ---------------------------------------------------------------------------
+# Normalisasi: SDK kadang mengembalikan nested field sebagai dict biasa
+# (bukan instance dataclass). Scoring kita mengandalkan atribut, jadi
+# kembalikan bentuk dataclass penuh secara rekursif.
+# ---------------------------------------------------------------------------
+
+_EMPTY_DEFAULTS = {str: "", int: 0, float: 0.0, bool: False}
+
+
+def _empty_for(ftype: object) -> object:
+    if ftype in _EMPTY_DEFAULTS:
+        return _EMPTY_DEFAULTS[ftype]
+    if get_origin(ftype) is list:
+        return []
+    return None
+
+
+def _coerce_dataclass(cls, value: object) -> object:
+    if isinstance(value, cls) or not isinstance(value, dict):
+        return value
+    kwargs = {}
+    for f in fields(cls):
+        if f.name in value:
+            kwargs[f.name] = _coerce_field(f.type, value[f.name])
+        elif f.default is not field.MISSING:
+            continue  # biarkan default konstruktor bekerja
+        else:
+            kwargs[f.name] = _empty_for(f.type)  # jaga agar tidak crash
+    try:
+        return cls(**kwargs)
+    except TypeError:
+        return value  # bentuk tak terduga: serahkan apa adanya
+
+
+def _coerce_field(ftype: object, value: object) -> object:
+    origin = get_origin(ftype)
+    if origin is list:
+        args = get_args(ftype)
+        if args and is_dataclass(args[0]) and isinstance(value, list):
+            return [_coerce_dataclass(args[0], v) for v in value]
+        return value
+    if is_dataclass(ftype) and isinstance(value, dict):
+        return _coerce_dataclass(ftype, value)
+    return value
+
+
+def normalize(schema_cls, value: object) -> object:
+    """Kembalikan `value` sebagai instance `schema_cls` (rekursif ke nested)."""
+    return _coerce_dataclass(schema_cls, value)
