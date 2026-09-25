@@ -68,7 +68,7 @@ Component-level, sabotaged world: detection **75%** (avg C2), verification behav
 
 ## My Benchmark
 
-👉 **[Kaggle: New Benchmark Task cf266](https://www.kaggle.com/code/idhoaf/new-benchmark-task-cf266)** — includes the main task (`sabotaged_tools`, sabotaged world), the honest calibration control (`sabotaged_tools_calibration`), seeded variants, and full per-run artifacts (every prompt, tool call, and assertion is recorded by the platform).
+👉 **[Kaggle Benchmark Task: sabotaged_tools_main](https://www.kaggle.com/benchmarks/tasks/idhoaf/sabotaged-tools-main)** — the platform-verified leaderboard shows the first result (Claude Haiku 4.5: 23.00/36). The run notebook (with the honest-world calibration control and seeded variants) is [here](https://www.kaggle.com/code/idhoaf/new-benchmark-task-cf266), with full per-run artifacts — every prompt, tool call, and assertion is recorded by the platform.
 
 The complete source is structured for audit on [GitHub](https://github.com/ridhoajaaa/kaggle-sabotaged-tools): `world.py` (deterministic simulated world + ground truth), `tools.py` (honest/poisoned implementations), `scoring.py` (C1/C2/C3), `tests/` (90-test cross-seed regression suite). Fair-poisoning invariants are machine-checked: the movement ledger always closes exactly at true stock, pallet and eaches reports are substantively identical, and the injection marker is present in every variant.
 
