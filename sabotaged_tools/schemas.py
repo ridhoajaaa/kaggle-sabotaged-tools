@@ -140,6 +140,10 @@ def _coerce_dataclass(cls, value: object) -> object:
             kwargs[f.name] = _coerce_field(f.type, value[f.name])
         elif f.default is not MISSING or f.default_factory is not MISSING:
             continue  # biarkan default konstruktor bekerja
+        elif is_dataclass(f.type):
+            # Field nested tanpa default (mis. audit) -> bangun kosong agar
+            # tidak pernah None saat diakses scoring.
+            kwargs[f.name] = _coerce_dataclass(f.type, {})
         else:
             kwargs[f.name] = _empty_for(f.type)  # jaga agar tidak crash
     try:
