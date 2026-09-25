@@ -63,8 +63,9 @@ FILES = ["__init__.py", "world.py", "tools.py", "ledger.py",
 for name in FILES:
     url = (f"https://raw.githubusercontent.com/ridhoajaaa/kaggle-sabotaged-tools/"
            f"{REV}/sabotaged_tools/{name}")
-    urllib.request.urlretrieve(url, BASE / name)
-    assert (BASE / name).stat().st_size > 500
+    dst = BASE / name
+    urllib.request.urlretrieve(url, dst)
+    print(f"  {name}: {dst.stat().st_size} bytes")
 print("Paket tertarik dari GitHub @", REV)
 ```
 
