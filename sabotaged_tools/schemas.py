@@ -2,9 +2,11 @@
 
 Setiap skenario meminta satu objek dataclass via `llm.prompt(..., schema=...)`:
 isi jawaban spesifik skenario + laporan audit seragam (komponen C2).
-"""
 
-from __future__ import annotations
+CATATAN: tanpa `from __future__ import annotations` agar anotasi field
+tetap objek tipe nyata (Python 3.10+) — aman untuk mekanisme refleksi
+structured-output SDK kaggle-benchmarks.
+"""
 
 from dataclasses import dataclass, field
 
