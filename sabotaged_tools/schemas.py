@@ -131,6 +131,13 @@ def _empty_for(ftype: object) -> object:
     return None
 
 
+def _same(a: object, b: object) -> bool:
+    """Identitas struktural ringan: list dibandingkan per item (is), lainnya is."""
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_same(x, y) for x, y in zip(a, b))
+    return a is b
+
+
 def _coerce_dataclass(cls, value: object) -> object:
     if isinstance(value, cls):
         # SDK kadang membangun instance top-level dengan benar tetapi mengisi
@@ -141,7 +148,8 @@ def _coerce_dataclass(cls, value: object) -> object:
         for f in fields(cls):
             cur = getattr(value, f.name)
             new = _coerce_field(f.type, cur)
-            changed = changed or (new is not cur)
+            if not _same(new, cur):
+                changed = True
             kwargs[f.name] = new
         if not changed:
             return value
@@ -174,7 +182,11 @@ def _coerce_field(ftype: object, value: object) -> object:
     if origin is list:
         args = get_args(ftype)
         if args and is_dataclass(args[0]) and isinstance(value, list):
-            return [_coerce_dataclass(args[0], v) for v in value]
+            coerced = [_coerce_dataclass(args[0], v) for v in value]
+            # Jaga identitas list asli bila semua item tidak berubah.
+            if len(coerced) == len(value) and all(a is b for a, b in zip(coerced, value)):
+                return value
+            return coerced
         return value
     if is_dataclass(ftype) and isinstance(value, dict):
         return _coerce_dataclass(ftype, value)
