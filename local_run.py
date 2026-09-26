@@ -26,7 +26,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any, Callable
 
-from sabotaged_tools import ledger, tools, world
+from sabotaged_tools import ledger, scenarios, tools, world
 from sabotaged_tools.schemas import (
     AuditReport,
     InvoiceDecision,
@@ -38,15 +38,7 @@ from sabotaged_tools.schemas import (
     Scenario5Answer,
     Scenario6Answer,
 )
-from sabotaged_tools.scoring import (
-    score_scenario_1,
-    score_scenario_2,
-    score_scenario_3,
-    score_scenario_4,
-    score_scenario_5,
-    score_scenario_6,
-    composite_score,  # noqa: F401  (dipakai konsumen eksternal)
-)
+from sabotaged_tools.scoring import composite_score  # noqa: F401 (dipakai konsumen eksternal)
 
 STALE_SIGNALS = ("warning", "as_of", "snapshot_age_hours")
 
@@ -66,20 +58,57 @@ class ScriptedLLM:
         self.tool_map: dict[str, Callable] = {}
 
     # -- infrastruktur -----------------------------------------------------
+    _HANDLERS: dict[str, Callable[[str], Any]] = {}
+
     def prompt(self, text: str, tools: list | None = None, schema: Any = None, **kwargs):
         self.tool_map = {fn.__name__: fn for fn in (tools or [])}
         name = schema.__name__ if schema is not None else ""
-        handler: dict[str, Callable[[str], Any]] = {
-            "Scenario1Answer": self._s1,
-            "Scenario2Answer": self._s2,
-            "Scenario3Answer": self._s3,
-            "Scenario4Answer": self._s4,
-            "Scenario5Answer": self._s5,
-            "Scenario6Answer": self._s6,
-        }
-        if name not in handler:
+        if name == "AuditReport":
+            # Pass 1 eksperimen two-pass: audit murni. Skenario di-inferensi
+            # dari toolset yang tersedia di prompt (unik per skenario).
+            return self._audit_pass(text)
+        handler = self._HANDLERS.get(name)
+        if handler is None:
             raise ValueError(f"schema tidak dikenal: {name}")
-        return handler[name](text)
+        answer = handler(self, text)
+        # Patuhi instruksi pass 2: "keep flagged_tools and data_concerns from
+        # your audit ... never silently drop them" — merge audit pass 1.
+        prev = getattr(self, "last_audit", None)
+        if prev is not None and getattr(answer, "audit", None) is not None:
+            merged_concerns = list(prev.data_concerns or [])
+            merged_flags = list(prev.flagged_tools or [])
+            for c in answer.audit.data_concerns or []:
+                if c not in merged_concerns:
+                    merged_concerns.append(c)
+            for t in answer.audit.flagged_tools or []:
+                if t not in merged_flags:
+                    merged_flags.append(t)
+            answer.audit = AuditReport(
+                data_concerns=merged_concerns, flagged_tools=merged_flags
+            )
+        self.last_audit = None
+        return answer
+
+    _SCENARIO_BY_TOOLS: dict[frozenset, str] = {
+        frozenset({"fx_rate"}): "Scenario1Answer",
+        frozenset({"tax_rate"}): "Scenario2Answer",
+        frozenset({"list_orders"}): "Scenario3Answer",
+        frozenset({"check_inventory", "get_recent_movements"}): "Scenario4Answer",
+        frozenset({"open_order_report", "case_pack_config"}): "Scenario5Answer",
+        frozenset({"account_overview", "get_account_notes", "policy_lookup"}): "Scenario6Answer",
+    }
+
+    def _audit_pass(self, text: str) -> AuditReport:
+        """Pass 1 two-pass: jalankan alur tool yang sama, kembalikan HANYA
+        audit-nya (tanpa slot jawaban) — persis seperti model nyata yang
+        mengisi AuditReport saja. Audit disimpan: prompt pass 2 MEMINTA
+        flag dari pass 1 dipertahankan, dan agen patuh pada instruksi itu."""
+        schema_name = self._SCENARIO_BY_TOOLS.get(frozenset(self.tool_map))
+        if schema_name is None:
+            raise ValueError(f"toolset tidak dikenali: {sorted(self.tool_map)}")
+        answer = self._HANDLERS[schema_name](self, text)
+        self.last_audit = answer.audit
+        return answer.audit
 
     def _call(self, tool: str, **kwargs) -> dict[str, Any]:
         result = self.tool_map[tool](**kwargs)
@@ -321,31 +350,40 @@ class ScriptedLLM:
 
 
 # ---------------------------------------------------------------------------
+# Tabel dispatch schema -> handler (diisi setelah class terdefinisi).
+# ---------------------------------------------------------------------------
+
+ScriptedLLM._HANDLERS = {
+    "Scenario1Answer": ScriptedLLM._s1,
+    "Scenario2Answer": ScriptedLLM._s2,
+    "Scenario3Answer": ScriptedLLM._s3,
+    "Scenario4Answer": ScriptedLLM._s4,
+    "Scenario5Answer": ScriptedLLM._s5,
+    "Scenario6Answer": ScriptedLLM._s6,
+}
+
+
+# ---------------------------------------------------------------------------
 # Eksekusi + asersi
 # ---------------------------------------------------------------------------
 
 
-def run_agent(strategy: str, sabotaged: bool = True) -> dict[str, dict[str, Any]]:
+def run_agent(
+    strategy: str, sabotaged: bool = True, mode: str = "single"
+) -> dict[str, dict[str, Any]]:
+    """Jalankan keenam skenario lewat scenarios.run_scenario (jalur yang SAMA
+    dengan task kbench di platform) menggunakan agen tiruan `strategy`.
+
+    `mode` diteruskan apa adanya: "single", "think_first", atau "two_pass".
+    "two_pass" otomatis berfungsi karena ScriptedLLM mendukung schema
+    AuditReport untuk pass 1 (audit murni tanpa slot jawaban).
+    """
     llm = ScriptedLLM(strategy=strategy)
     results: dict[str, dict[str, Any]] = {}
-    tools.reset_all()
-    a1 = llm.prompt("s1", tools=tools.get_toolset(sabotaged=sabotaged), schema=Scenario1Answer)
-    results["S1"] = score_scenario_1(a1, ledger.get_log(), sabotaged=sabotaged)
-    tools.reset_all()
-    a2 = llm.prompt("s2", tools=tools.get_toolset(sabotaged=sabotaged), schema=Scenario2Answer)
-    results["S2"] = score_scenario_2(a2, ledger.get_log(), sabotaged=sabotaged)
-    tools.reset_all()
-    a3 = llm.prompt("s3", tools=tools.get_toolset(sabotaged=sabotaged), schema=Scenario3Answer)
-    results["S3"] = score_scenario_3(a3, ledger.get_log(), sabotaged=sabotaged)
-    tools.reset_all()
-    a4 = llm.prompt("s4", tools=tools.get_toolset(sabotaged=sabotaged), schema=Scenario4Answer)
-    results["S4"] = score_scenario_4(a4, ledger.get_log(), sabotaged=sabotaged)
-    tools.reset_all()
-    a5 = llm.prompt("s5", tools=tools.get_toolset(sabotaged=sabotaged), schema=Scenario5Answer)
-    results["S5"] = score_scenario_5(a5, ledger.get_log(), sabotaged=sabotaged)
-    tools.reset_all()
-    a6 = llm.prompt("s6", tools=tools.get_toolset(sabotaged=sabotaged), schema=Scenario6Answer)
-    results["S6"] = score_scenario_6(a6, ledger.get_log(), sabotaged=sabotaged)
+    for code, name in zip(scenarios._SCENARIO_CODES, scenarios.SCENARIO_NAMES):
+        results[code] = scenarios.run_scenario(
+            llm, code, sabotaged=sabotaged, mode=mode
+        )
     return results
 
 

@@ -23,6 +23,7 @@ FILES = [
     "ledger.py",
     "schemas.py",
     "scoring.py",
+    "scenarios.py",
     "kbench_tasks.py",
     "analyze.py",
 ]
@@ -95,8 +96,13 @@ def main() -> None:
             "import kaggle_benchmarks as kbench\n"
             "from sabotaged_tools.kbench_tasks import (\n"
             "    sabotaged_tools_task, sabotaged_tools_calibration_task,\n"
+            "    sabotaged_tools_think_first_task, sabotaged_tools_two_pass_task,\n"
             "    s1_task, s2_task, s3_task, s4_task, s5_task, s6_task,\n"
-            "    print_breakdown,\n"
+            "    print_breakdown, LAST_RESULTS,\n"
+            ")\n"
+            "from sabotaged_tools.analyze import (\n"
+            "    analyze_detailed, collect_from_last_results, print_report,\n"
+            "    print_experiment_summary, mode_totals,\n"
             ")\n"
             "from sabotaged_tools import world\n\n"
             "# Lihat model yang tersedia lalu pilih satu (flash = lebih longgar):\n"
@@ -125,13 +131,24 @@ def main() -> None:
             "run_retry(sabotaged_tools_calibration_task, LLM)\n"
             "print_breakdown()\n\n"
             "# ============================================================\n"
+            "# Eksperimen verify-then-recompute (hipotesis dua-pass dari\n"
+            "# diskusi DEV). Three-arm pada dunia yang sama:\n"
+            "#   1. single       = baseline di atas (tidak perlu run ulang)\n"
+            "#   2. think_first  = kontrol: 1 pass + think step by step\n"
+            "#   3. two_pass     = pass 1 audit murni, pass 2 recompute\n"
+            "# Bacaan: S1-S3 naik di two_pass TAPI tidak di think_first\n"
+            "# => detection-correction gap ARSITEKTURAL (bukan capability).\n"
+            "# ============================================================\n"
+            "run_retry(sabotaged_tools_think_first_task, LLM)\n"
+            "print_breakdown('think_first')\n\n"
+            "run_retry(sabotaged_tools_two_pass_task, LLM)\n"
+            "print_breakdown('two_pass')\n\n"
+            "print_experiment_summary(LAST_RESULTS)\n\n"
+            "# ============================================================\n"
             "# Analisis: Indeks Kerentanan Sabotase (SVI) per model\n"
             "# Jalankan kedua task di atas untuk SETIAP model (ganti default\n"
             "# model), kumpulkan hasilnya, lalu cetak tabel markdown:\n"
             "# ============================================================\n"
-            "from sabotaged_tools.analyze import (\n"
-            "    analyze_detailed, collect_from_last_results, print_report,\n"
-            ")\n\n"
             "ALL_MODELS = {}\n"
             "# Ulangi untuk tiap model (setelah run kedua task):\n"
             "# ALL_MODELS['google/gemini-2.5-pro'] = collect_from_last_results(LAST_RESULTS)\n"

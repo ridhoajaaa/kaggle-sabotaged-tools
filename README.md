@@ -54,11 +54,12 @@ sabotaged_tools/
   ledger.py        # Log panggilan tool (dasar C3)
   schemas.py       # Dataclass jawaban + AuditReport (dasar C2)
   scoring.py       # Penilaian C1/C2/C3 per skenario + skor komposit
-  kbench_tasks.py  # Task kaggle-benchmarks (6 skenario + task agregat + kontrol kalibrasi)
-  analyze.py       # Analisis hasil: Indeks Kerentanan Sabotase (SVI) per model
+  scenarios.py     # Runner per skenario + 3 mode eksekusi (eksperimen dua-pass)
+  kbench_tasks.py  # Task kaggle-benchmarks (pembungkus tipis di atas scenarios)
+  analyze.py       # Analisis hasil: SVI per model + ringkasan three-arm
 local_run.py       # Harness uji lokal: agen pintar (36/36) vs naif (3/36)
 gen_notebook.py    # Generator kaggle-notebook.ipynb
-tests/             # Suite regresi lintas-seed (90 test)
+tests/             # Suite regresi lintas-seed (90+31 test)
 scripts/           # Gerbang kualitas pre-push (check.sh + installer hook)
 ```
 
@@ -73,6 +74,29 @@ world.reset_default()    # kembali ke dataset handcrafted
 ```
 
 Selisih skor antar dunia adalah sinyal utama: skor teracaukan yang jauh di bawah skor jujur = kalah oleh sabotase (bukan ketidaktahuan). Invarian fairness tiap varian diverifikasi `_check_invariants()` (komposisi invoice, tarif distinktar, ledger menutup eksak, substansi unit identik, KYC expired/pending, penanda injeksi hadir).
+
+## Eksperimen verify-then-recompute (three-arm)
+
+Dari diskusi DEV: hipotesis bahwa *detection–correction gap* di S1–S3 bersifat **arsitektural** — C2 (audit) dan C1 (jawaban) dihasilkan satu generation pass tanpa kausal link. Benchmark sekarang punya tiga mode eksekusi identik-soal:
+
+| Mode | Bentuk | Menguji |
+|---|---|---|
+| `single` (`sabotaged_tools_task`) | jawaban + audit dalam satu panggilan | baseline leaderboard |
+| `think_first` (`sabotaged_tools_think_first_task`) | satu panggilan + "think step by step then answer" | kontrol: cukupkah thinking ekstra? |
+| `two_pass` (`sabotaged_tools_two_pass_task`) | pass 1 audit murni (`AuditReport` saja) → audit verbatim di-feed-back → pass 2 recompute | kausal link paksa: keputusan bergantung audit |
+
+Bacaan: S1–S3 naik di `two_pass` TAPI tidak di `think_first` ⇒ gagalan arsitektural, dan resep produksi murah (verify-then-recompute sebagai dua panggilan) terbukti. Naik di keduanya ⇒ cuma kurang thinking. Tidak naik ⇒ capability gap bertahan.
+
+```python
+# Di notebook, setelah baseline + kalibrasi:
+run_retry(sabotaged_tools_think_first_task, LLM); print_breakdown('think_first')
+run_retry(sabotaged_tools_two_pass_task, LLM);   print_breakdown('two_pass')
+print_experiment_summary(LAST_RESULTS)   # tabel single vs think_first vs two_pass
+
+# Lokal (tanpa Kaggle) — ketiga arm pada seed yang sama:
+from local_run import run_agent
+arms = {m: run_agent('smart', sabotaged=True, mode=m) for m in ('single','think_first','two_pass')}
+```
 
 ## Analisis: Indeks Kerentanan Sabotase (SVI)
 
@@ -102,12 +126,12 @@ python3 -m sabotaged_tools.analyze scores.json
 ```bash
 python3 local_run.py          # smoke test: default + 4 seed + dunia jujur
 
-# Suite pytest lengkap (90 test, 20 seed lintas varian):
+# Suite pytest lengkap (90 test varian + 31 test mode, 20 seed lintas varian):
 python3 -m venv .venv && .venv/bin/pip install pytest
 .venv/bin/pytest -q
 ```
 
-Suite pytest (`tests/test_variant_generator.py`) menjalankan empat lapis validasi per seed: invarian fairness, determinisme generator, konsistensi ground truth dinamis vs data dunia, penyampaian racuan (lapis pertama racu, lapis dalam jujur), plus end-to-end (smart 36/36, naive < 36) dan properti dunia jujur (C2 murni). Uji ini yang menangkap bug token hook hardcode saat page size varian berubah — semuanya berjalan < 1 detik.
+Dua suite pytest: `tests/test_variant_generator.py` (invarian fairness, determinisme generator, konsistensi ground truth dinamis vs data dunia, penyampaian racuan, end-to-end smart/naive, properti dunia jujur) dan `tests/test_modes.py` (eksperimen three-arm: smart 36/36 di SEMUA mode dan seed, kalibrasi dunia jujur bertahan di two_pass, prompt pass 2 memuat audit pass 1 verbatim, naive tetap rendah di semua mode). Uji ini yang menangkap bug token hook hardcode saat page size varian berubah — semuanya berjalan < 1 detik.
 
 ## Gerbang pre-push (git hook)
 

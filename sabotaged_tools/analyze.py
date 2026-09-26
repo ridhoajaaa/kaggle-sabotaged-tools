@@ -102,6 +102,57 @@ def collect_from_last_results(last_results: dict[str, dict[str, Any]]) -> dict[s
     return out
 
 
+# Prefix kunci LAST_RESULTS per mode eksperimen (sumber: kbench_tasks;
+# diduplikasi di sini agar analyze bebas impor kbench_tasks yang butuh SDK).
+_MODE_PREFIXES = (("single", ""), ("think_first", "think_first::"), ("two_pass", "two_pass::"))
+
+
+def mode_totals(last_results: dict[str, dict[str, Any]], sabotaged: bool = True) -> dict[str, int]:
+    """Total /36 per mode eksperimen dari LAST_RESULTS (dunia teracaukan,
+    atau dunia jujur jika sabotaged=False).
+
+    Kunci input: "S1_currency" (single), "think_first::S1_currency",
+    "two_pass::S1_currency", masing-masing + "_honest" untuk dunia jujur.
+    Mode yang belum dijalankan diabaikan.
+    """
+    suffix = "" if sabotaged else "_honest"
+    out: dict[str, int] = {}
+    for mode, prefix in _MODE_PREFIXES:
+        vals = [
+            int(last_results[prefix + n + suffix]["total"])
+            for n in _SCENARIOS
+            if prefix + n + suffix in last_results
+        ]
+        if vals:
+            out[mode] = sum(vals)
+    return out
+
+
+def print_experiment_summary(last_results: dict[str, dict[str, Any]]) -> None:
+    """Cetak perbandingan three-arm (single vs think_first vs two_pass).
+
+    Hipotesis dua-pass (dari diskusi DEV): jika S1-S3 naik di two_pass
+    tapi TIDAK di think_first, detection-correction gap bersifat
+    arsitektural, bukan capability gap.
+    """
+    sab = mode_totals(last_results, sabotaged=True)
+    print("== Eksperimen verify-then-recompute (dunia teracaukan) ==")
+    if not sab:
+        print("Belum ada hasil — jalankan minimal satu task mode dulu.")
+        return
+    for mode, total in sab.items():
+        s13 = sum(
+            int(last_results[p + n]["total"])
+            for m, p in _MODE_PREFIXES if m == mode
+            for n in _SCENARIOS[:3] if p + n in last_results
+        )
+        print(f"  {mode:<12} total {total:>2}/36   (S1-S3: {s13}/18)")
+    base = sab.get("single")
+    if base is not None and "two_pass" in sab:
+        delta = sab["two_pass"] - base
+        print(f"  delta two_pass vs single: {delta:+d} poin")
+
+
 def analyze_detailed(models: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     """Analisis lengkap dari struktur {"model": {"sabotaged": {...}, "honest": {...}}}.
     Nilai "sabotaged"/"honest" boleh berupa dict per skenario (terperinci) atau

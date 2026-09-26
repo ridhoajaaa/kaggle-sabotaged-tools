@@ -3,6 +3,7 @@
 > Tujuan: menjalankan task utama (dunia teracaukan) + kontrol kalibrasi (dunia jujur)
 > dengan model pilihan Anda, lalu mengambil angka untuk mengisi `[FILL: ...]` di
 > `DEV_SUBMISSION_DRAFT.md`. Perkiraan durasi per model: 5–15 menit (~12 prompt LLM).
+> Plus eksperimen three-arm: +2 task ≈ +24 prompt LLM per model.
 
 ## 0. Prasyarat
 - Akun Kaggle **terverifikasi telepon** (syarat untuk memilih model LLM di notebook).
@@ -26,16 +27,25 @@
 ## 3. Jalankan
 1. **Sel 1**: menulis paket ke `/kaggle/working/sabotaged_tools` (selalu jalan duluan).
 2. **Sel 2**: guard instalasi SDK → impor task → `sabotaged_tools_task.run()` →
-   `print_breakdown()` → `sabotaged_tools_calibration_task.run()` → `print_breakdown()`.
+   `print_breakdown()` → `sabotaged_tools_calibration_task.run()` → `print_breakdown()`
+   → **eksperimen three-arm** (`think_first` lalu `two_pass`) →
+   `print_experiment_summary(LAST_RESULTS)`.
    Anda akan melihat agen memanggil tool; biarkan sampai selesai (jangan interupsi).
-3. Baca dua tabel breakdown yang tercetak — itulah bahan angka artikel:
+3. Baca tabel breakdown yang tercetak — itulah bahan angka artikel:
 
    ```
+   == single-pass (baseline leaderboard) ==
    skenario                             total  C1  C2  C3
    S1_currency [racuan]                 6/6    2   2   2
    ...
    TOTAL [racuan]                     xx/36
    TOTAL [jujur]                      yy/36
+
+   == Eksperimen verify-then-recompute (dunia teracaukan) ==
+     single       total xx/36   (S1-S3: x/18)
+     think_first  total xx/36   (S1-S3: x/18)
+     two_pass     total xx/36   (S1-S3: x/18)
+     delta two_pass vs single: +N poin
    ```
 
 4. **Sel terakhir**: `%choose sabotaged_tools_task` — WAJIB dijalankan setelah run
@@ -59,7 +69,7 @@ REV = "0f1ffc1"  # pin commit — naikkan bila repo diperbarui
 BASE = pathlib.Path("/kaggle/working/sabotaged_tools")
 BASE.mkdir(parents=True, exist_ok=True)
 FILES = ["__init__.py", "world.py", "tools.py", "ledger.py",
-         "schemas.py", "scoring.py", "kbench_tasks.py", "analyze.py"]
+         "schemas.py", "scoring.py", "scenarios.py", "kbench_tasks.py", "analyze.py"]
 for name in FILES:
     url = (f"https://raw.githubusercontent.com/ridhoajaaa/kaggle-sabotaged-tools/"
            f"{REV}/sabotaged_tools/{name}")
@@ -81,12 +91,19 @@ gunakan **Add Models** untuk menjadwalkan model lain pada task yang sama.
 
 ## 6. Kontrol kalibrasi & varian (untuk artikel)
 - `sabotaged_tools_calibration_task` sudah berjalan di sel 2 (dunia jujur, C2 murni).
+- Eksperimen three-arm (`sabotaged_tools_think_first_task`,
+  `sabotaged_tools_two_pass_task`) juga sudah berjalan di sel 2 — outputnya
+  diringkas `print_experiment_summary`. Baseline pembandingnya adalah run
+  `sabotaged_tools_task` yang sudah ada di run yang sama (dunia default identik).
+  Tabel hasilnya = bahan seksi "Update: a reader's hypothesis, tested" artikel DEV.
 - Opsional, untuk bagian "robustness" artikel: sebelum sel run, eksekusi
-  `world.apply_variant(7)` (atau seed lain) lalu jalankan ulang kedua task — soal
-  berubah total, skor agen teliti tetap harus 36/36.
+  `world.apply_variant(7)` (atau seed lain) lalu jalankan ulang task — soal
+  berubah total, skor agen teliti tetap harus 36/36. Untuk eksperimen three-arm
+  pada varian ber-seed: `world.apply_variant(7)` lalu jalankan ketiga task
+  berturut-turut (baseline single-pass boleh diwakili run terpisah asal seed sama).
 - Catatan: leaderboard kbench hanya mendukung **satu task per notebook**. Task
-  kalibrasi tetap valid sebagai data artikel; jika ingin leaderboard-nya sendiri,
-  duplikat notebook dan `%choose sabotaged_tools_calibration_task` di sana.
+  kalibrasi/eksperimen tetap valid sebagai data artikel; jika ingin leaderboard-nya
+  sendiri, duplikat notebook dan `%choose` task tersebut di sana.
 
 ## 7. Isi draf DEV dari hasil
 Per model, catat dari dua tabel breakdown:
