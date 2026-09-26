@@ -28,8 +28,12 @@ model as every number in this article.
 | Arm | Total /36 | S1–S3 answer (C1) | S1–S3 detection (C2) |
 |---|---|---|---|
 | `single` (baseline) | **23** | 0, 0, 0 | 2, 2, 2 |
-| `think step by step` | **22** | 0, 0, 0 | 2, **0**, 2 |
+| `think step by step` | **23** | 0, 0, 0 | 2, 2, 2 |
 | `two-pass audit→recompute` | **21** | 0, 0, 0 | 2, 2, 2 |
+
+(Every number here comes from a single saved Kaggle run — the public
+notebook is the artifact: [experiment notebook](https://www.kaggle.com/code/idhoaf/new-benchmark-task-82f01),
+repo commit `cbad355`.)
 
 **The hypothesis is not supported — for this model.** Forcing the audit into
 the decision loop did not close the gap. In the two-pass arm the model still
@@ -46,15 +50,13 @@ I won't claim splitting *hurts*. But where errors moved is instructive:
 - **S5:** forced detection finally surfaced (C2 0→2 — the split elicits
   awareness that single-pass missed entirely) while the answer broke
   (C1 2→0). Detection can be manufactured; consulting it, apparently, not.
-- **S4:** a correct reservation flipped to a wrong one — the model
+- **S4:** a correct reservation flipped to a wrong one (C1 2→0) — the model
   over-corrected against data it had flagged, distrusting sources it
   shouldn't have.
-- **S2 under "think step by step":** the audit itself degraded (C2 2→0).
-  Extra thinking instructions perturbed the model into *not reporting* the
-  contradiction it had been reporting.
-- One pass-2 answer came back with a `null` price field — malformed
-  structured output that crashed my scorer until I made it grade malformed
-  as wrong. Recompute passes produce *worse* structured output, not better.
+- In an earlier interactive session (not the saved run), one pass-2 answer
+  came back with a `null` price field — malformed structured output that
+  crashed my scorer until I made it grade malformed answers as wrong.
+  Recompute passes can produce *worse* structured output, not better.
 
 Two honest caveats. This is one model and one run per arm; Haiku's
 session-to-session variance is a few points (an earlier draft session
@@ -78,23 +80,22 @@ identical seeded worlds, same C1/C2/C3 scoring as the leaderboard.
 # Balasan utas Hamid (paste-ready, English)
 
 > Hamid — I ran your experiment tonight. Three arms on identical worlds
-> (Claude Haiku 4.5): single **23/36**, think-step-by-step **22/36**,
-> two-pass **21/36**.
+> (Claude Haiku 4.5, one saved run): single **23/36**, think-step-by-step
+> **23/36**, two-pass **21/36** — public notebook:
+> https://www.kaggle.com/code/idhoaf/new-benchmark-task-82f01
 >
 > Your control design earned its keep: "think step by step" did *not*
-> close the gap (S1–S3 answer scores stayed 0, and it actually degraded
-> the S2 audit — C2 dropped from 2 to 0), so it was never about missing
-> thinking. But two-pass didn't close it either: the model names the exact
-> poisoned tool in pass 1, then computes against it in pass 2 with the
-> audit verbatim in its context. C1 on S1–S3 is 0 in all three arms, while
-> the honest-world control solves the same scenarios cleanly — the failure
-> isn't the missing field dependency.
+> close the gap (S1–S3 answer scores stayed 0). But two-pass didn't close
+> it either: the model names the exact poisoned tool in pass 1, then
+> computes against it in pass 2 with the audit verbatim in its context.
+> C1 on S1–S3 is 0 in all three arms, while the honest-world control
+> solves the same scenarios cleanly — the failure isn't the missing field
+> dependency, at least not by itself.
 >
 > The damage moved in interesting ways, though: S5's detection finally
 > appeared under two-pass (C2 0→2) while its answer broke (C1 2→0) —
 > detection can be manufactured, consulting it apparently can't, for this
-> model. And one pass-2 answer returned a null price field (crashed my
-> scorer until I graded malformed as wrong). Full write-up added to the
-> article — thanks, this was the best comment I could have hoped for.
-> Caveat: one model, one run per arm; if I get time before the contest
-> deadline I'll run the seeded variants multi-seed and post the table.
+> model. Full write-up added to the article — thanks, this was the best
+> comment I could have hoped for. Caveat: one model, one run per arm; if I
+> get time before the contest deadline I'll run the seeded variants
+> multi-seed and post the table.
