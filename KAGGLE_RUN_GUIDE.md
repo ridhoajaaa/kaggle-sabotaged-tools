@@ -65,7 +65,7 @@ Daripada menyalin-ulang sel "tulis paket" setiap kali repo diperbarui, ganti sel
 ```python
 import urllib.request, pathlib
 
-REV = "0f1ffc1"  # pin commit — naikkan bila repo diperbarui
+REV = "6177b79"  # pin commit — naikkan bila repo diperbarui (harus >= 6177b79: paket kini butuh scenarios.py)
 BASE = pathlib.Path("/kaggle/working/sabotaged_tools")
 BASE.mkdir(parents=True, exist_ok=True)
 FILES = ["__init__.py", "world.py", "tools.py", "ledger.py",
