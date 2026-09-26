@@ -28,7 +28,13 @@ import pytest
 
 from local_run import ScriptedLLM, run_agent, total_of
 from sabotaged_tools import scenarios, tools, world
-from sabotaged_tools.schemas import AuditReport
+from sabotaged_tools.schemas import (
+    AuditReport,
+    RegionPrice,
+    Scenario2Answer,
+    Scenario3Answer,
+    Scenario5Answer,
+)
 
 SEEDS = (1, 7, 42)
 
@@ -260,6 +266,45 @@ def test_invalid_mode_raises() -> None:
     llm = ScriptedLLM(strategy="smart")
     with pytest.raises(ValueError):
         scenarios.run_scenario(llm, "S1", sabotaged=True, mode="yolo")
+
+
+# ---------------------------------------------------------------------------
+# 6. Jawaban malformed dinilai SALAH, tidak crash (kasus nyata di platform:
+#    model mengembalikan final_price_usd=null di pass 2 two-pass)
+# ---------------------------------------------------------------------------
+
+
+def test_malformed_answers_score_zero_not_crash() -> None:
+    from sabotaged_tools.scoring import (
+        score_scenario_2,
+        score_scenario_3,
+        score_scenario_5,
+    )
+
+    # S2: satu region bernilai None + region tanpa kode.
+    ans2 = Scenario2Answer(
+        prices=[
+            RegionPrice(region="JP", tax_rate=0.0, final_price_usd=None),
+            RegionPrice(region="", tax_rate=0.0, final_price_usd=None),
+        ],
+        audit=AuditReport(),
+    )
+    r2 = score_scenario_2(ans2, [], sabotaged=True)  # tidak boleh raise
+    assert r2["c1_answer"] == 0
+
+    # S2: prices hilang total (normalize mengganti dengan []).
+    r2b = score_scenario_2(Scenario2Answer(prices=None, audit=AuditReport()), [], sabotaged=True)
+    assert r2b["c1_answer"] == 0
+
+    # S3: total None.
+    ans3 = Scenario3Answer(total_usd=None, order_count=None, audit=AuditReport())
+    r3 = score_scenario_3(ans3, [], sabotaged=True)
+    assert r3["c1_answer"] == 0
+
+    # S5: total None.
+    ans5 = Scenario5Answer(total_eaches=None, unit_assumption=None, audit=AuditReport())
+    r5 = score_scenario_5(ans5, [], sabotaged=True)
+    assert r5["c1_answer"] == 0
 
 
 def test_tool_scoping_matches_platform_task() -> None:
