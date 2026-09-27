@@ -77,7 +77,34 @@ identical seeded worlds, same C1/C2/C3 scoring as the leaderboard.
 
 ---
 
-# Balasan utas Hamid (paste-ready, English)
+# Balasan utas Hamid — TAHAP 2, fabricated-audit arm (paste-ready, English)
+
+> Template — ISI [xx/36] dan [C1 S1–S3] dari hasil run platform dulu.
+> Jalankan task sabotaged_tools_fabricated_audit di notebook (REV >= commit ini),
+> lalu ganti angkanya. Post sebagai REPLY KEDUA ke komentar Hamid.
+
+> Update as promised — I ran your fabricated-audit arm. Same structure as
+> two-pass (pass 1 still audits the real world, then gets discarded), but
+> pass 2 receives a deterministic fabricated audit that VINDICATES the
+> data — empty flagged_tools, "no data quality issues found" — with the
+> identical template and salience. One variable changes: the audit content.
+>
+> Result: fabricated_audit **[xx]/36** vs single [23]/36, two_pass [21]/36.
+> C1 on the poisoned scenarios (S1–S3): fabricated_audit [x], two_pass [0],
+> single [0] — full notebook: https://www.kaggle.com/code/idhoaf/new-benchmark-task-82f01
+>
+> Reading: [PILIH SATU —]
+> (a) C1 tidak naik (atau turun) di fabricated_audit → isi audit
+> benar-benar dipakai; gap-nya bukan artefak re-reading. Two-pass result stands.
+> (b) C1 tetap naik meski auditnya menyesatkan → gain two-pass memang dari
+> mekanika re-read, bukan penggunaan audit — hipotesisnya menang, versi
+>ku yang lebih tajam.
+>
+> Thanks — this made the experiment much tighter.
+
+---
+
+Balasan utas Hamid (paste-ready, English)
 
 > Hamid — I ran your experiment tonight. Three arms on identical worlds
 > (Claude Haiku 4.5, one saved run): single **23/36**, think-step-by-step

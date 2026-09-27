@@ -1,10 +1,13 @@
-"""Uji eksperimen "verify-then-recompute": tiga mode eksekusi skenario.
+"""Uji eksperimen "verify-then-recompute": empat mode eksekusi skenario.
 
 Mode (lihat scenarios.py):
   single       — baseline leaderboard (jawaban + audit dalam satu pass).
   think_first  — kontrol: single-pass + "think step by step then answer".
   two_pass     — pass 1 audit murni (AuditReport saja), pass 2 recompute
                  dengan audit verbatim sebagai konteks.
+  fabricated_audit — kontrol anti-re-reading: struktur two_pass, tetapi
+                 pass 2 menerima audit PALSU deterministik (flags kosong,
+                "tidak ada masalah") alih-alih audit pass 1 model.
 
 Properti yang dijaga:
   1. Fairness: agen pintar berbasis sinyal harus 36/36 di SEMUA mode,
@@ -123,6 +126,124 @@ def test_two_pass_pass2_receives_pass1_audit_verbatim() -> None:
     # Smart agent menandai tax_rate di dunia teracaukan:
     assert flagged_from_pass1
     assert '"flagged_tools"' in recompute_prompt
+
+
+# ---------------------------------------------------------------------------
+# 3b. Mekanika fabricated_audit (kontrol anti-re-reading)
+# ---------------------------------------------------------------------------
+
+
+def test_fabricated_audit_makes_two_llm_calls_per_scenario() -> None:
+    """fabricated_audit = struktur two_pass: 1 audit (AuditReport) + 1 recompute."""
+    calls: list[str] = []
+
+    class ProbeLLM(ScriptedLLM):
+        def prompt(self, text, tools=None, schema=None, **kwargs):
+            calls.append(getattr(schema, "__name__", "?"))
+            return super().prompt(text, tools=tools, schema=schema, **kwargs)
+
+    llm = ProbeLLM(strategy="smart")
+    scenarios.run_scenario(llm, "S1", sabotaged=True, mode="fabricated_audit")
+    assert calls == ["AuditReport", "Scenario1Answer"]
+
+
+def test_fabricated_audit_pass2_receives_fabricated_not_real_audit() -> None:
+    """Pass 2 fabricated_audit menerima audit PALSU, bukan audit pass 1 model.
+
+    Audit palsu harus: flags kosong (membenarkan data) + concern "no data
+    quality issues" — SAMA di semua mode dunia (deterministik). Pass 1 tetap
+    dijalankan persis seperti two_pass.
+    """
+    seen: list[tuple[str, str]] = []
+
+    class ProbeLLM(ScriptedLLM):
+        def prompt(self, text, tools=None, schema=None, **kwargs):
+            seen.append((getattr(schema, "__name__", "?"), text))
+            return super().prompt(text, tools=tools, schema=schema, **kwargs)
+
+    llm = ProbeLLM(strategy="smart")
+    scenarios.run_scenario(llm, "S2", sabotaged=True, mode="fabricated_audit")
+    recompute_prompt = next(p for s, p in seen if s == "Scenario2Answer")
+
+    assert "audit you produced" in recompute_prompt  # template identik two_pass
+    assert '"flagged_tools": []' in recompute_prompt  # flags dikosongkan
+    assert "no data quality issues found" in recompute_prompt
+    # ISINYA deterministik — tidak mengutip temuan model ("tax_rate" tak boleh
+    # bocor ke audit palsu walau pass 1 model menandainya).
+    assert "tax_rate" not in recompute_prompt.split("Original task:")[0]
+
+
+def test_fabricated_audit_pass1_still_runs_on_real_world() -> None:
+    """Pass 1 tetap dijalankan persis seperti two_pass (model mengaudit dunia
+    nyata) — hasilnya saja yang dibuang. Ledger tetap memuat pass 1 (C3)."""
+    from sabotaged_tools import ledger
+
+    schemas_seen: list[str] = []
+    sizes_at_pass2: list[int] = []
+
+    class ProbeLLM(ScriptedLLM):
+        def prompt(self, text, tools=None, schema=None, **kwargs):
+            name = getattr(schema, "__name__", "")
+            schemas_seen.append(name)
+            if name == "Scenario3Answer":
+                sizes_at_pass2.append(len(ledger.get_log()))
+            return super().prompt(text, tools=tools, schema=schema, **kwargs)
+
+    scenarios.run_scenario(ProbeLLM(strategy="smart"), "S3", sabotaged=True, mode="fabricated_audit")
+    assert schemas_seen == ["AuditReport", "Scenario3Answer"]
+    assert sizes_at_pass2 and sizes_at_pass2[0] >= 1, (
+        "ledger saat pass 2 harus sudah berisi panggilan audit pass 1"
+    )
+
+
+def test_fabricated_audit_template_and_salience_match_two_pass() -> None:
+    """Isolasi variabel: template & salience identik, HANYA isi audit beda.
+
+    Prompt pass 2 kedua mode harus sama persis setelah JSON audit
+    diganti — dibuktikan dengan menyamakan struktur template.
+    """
+    two_prompts: list[str] = []
+    fab_prompts: list[str] = []
+
+    class ProbeLLM(ScriptedLLM):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            self.bucket = two_prompts
+
+        def prompt(self, text, tools=None, schema=None, **kwargs):
+            if getattr(schema, "__name__", "") == "Scenario5Answer":
+                self.bucket.append(text)
+            return super().prompt(text, tools=tools, schema=schema, **kwargs)
+
+    scenarios.run_scenario(ProbeLLM(strategy="smart"), "S5", sabotaged=True, mode="two_pass")
+    fab = ProbeLLM(strategy="smart")
+    fab.bucket = fab_prompts
+    scenarios.run_scenario(fab, "S5", sabotaged=True, mode="fabricated_audit")
+
+    assert len(two_prompts) == 1 and len(fab_prompts) == 1
+    two, fabp = two_prompts[0], fab_prompts[0]
+    # Template sama: ganti isi JSON-nya, sisanya identik.
+    import re
+    skeleton = lambda s: re.sub(r"\{[^{}]*\}", "<JSON>", s, count=1)  # noqa: E731
+    # Ambil bagian sebelum/ sesudah blok JSON audit di masing-masing prompt.
+    pre_two, post_two = two.split("---", 1)
+    pre_fab, post_fab = fabp.split("---", 1)
+    assert pre_two.split("\n\n", 1)[0] == pre_fab.split("\n\n", 1)[0], (
+        "kalimat pembuka template pass 2 harus identik antara two_pass dan fabricated_audit"
+    )
+    assert "Original task:" in two and "Original task:" in fabp
+    # Isi audit yang berbeda: dua_pass memuat temuan model; fab memuat deny.
+    assert '"flagged_tools"' in two and '"flagged_tools": []' in fabp
+
+
+def test_fabricated_audit_content_is_deterministic() -> None:
+    """Audit palsu sama persis di setiap pemanggilan (dan tak bergantung dunia)."""
+    t1 = scenarios.fabricated_audit_text()
+    t2 = scenarios.fabricated_audit_text()
+    assert t1 == t2
+    parsed = json.loads(t1)
+    assert parsed["flagged_tools"] == []
+    assert len(parsed["data_concerns"]) == 1
 
 
 def test_two_pass_pass2_prompt_forbids_dropping_flags() -> None:

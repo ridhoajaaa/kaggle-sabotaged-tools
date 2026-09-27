@@ -5,7 +5,7 @@ eksperimen dua-pass) bisa diuji lokal dengan ScriptedLLM di local_run.py,
 tanpa menginstal SDK. kbench_tasks.py hanya membungkus runner di sini
 dengan dekorator @kbench.task.
 
-TIGA MODE EKSEKUSI (eksperimen "verify-then-recompute", dari diskusi DEV):
+EMPAT MODE EKSEKUSI (eksperimen "verify-then-recompute", dari diskusi DEV):
 
   "single"     — satu panggilan: jawaban + audit sekaligus (baseline;
                  inilah yang dijalankan di leaderboard).
@@ -21,8 +21,19 @@ TIGA MODE EKSEKUSI (eksperimen "verify-then-recompute", dari diskusi DEV):
                  Uji langsung atas hipotesis struktur di komentar DEV:
                  C2 dan C1 dalam SATU generation pass tidak punya kausal
                  link; pass terpisah memaksakan kausal link itu.
+  "fabricated_audit" — KONTROL anti-"re-reading" (tindak lanjut diskusi
+                 DEV, usul Hamid Ahmadian): struktur identik two_pass —
+                 pass 1 audit murni TETAP dijalankan — tetapi audit yang
+                 disisipkan ke pass 2 DIGANTI audit PALSU deterministik
+                 yang membenarkan data teracaukan (flags kosong, "tidak
+                 ada masalah"), dengan template & salience yang SAMA.
+                 Satu-satunya variabel yang berubah adalah isi audit.
+                 Jika C1 naik dibanding baseline meski auditnya menyesatkan,
+                 kenaikan two-pass berasal dari mekanika re-read, bukan isi
+                 audit; jika C1 malah turun, isi audit benar-benar dipakai.
+                 Readout: C1.
 
-Ledger, skema, scoring, dan world dipakai persis sama di ketiga mode,
+Ledger, skema, scoring, dan world dipakai persis sama di semua mode,
 sehingga perbandingan antar-mode apple-to-apple (termasuk pada varian
 ber-seed yang identik: world.apply_variant(seed) sebelum tiap arm).
 """
@@ -44,7 +55,7 @@ from .schemas import (
     normalize,
 )
 
-MODES = ("single", "think_first", "two_pass")
+MODES = ("single", "think_first", "two_pass", "fabricated_audit")
 
 THINK_FIRST_SUFFIX = (
     "\n\nThink step by step: first assess whether every piece of tool data "
@@ -95,6 +106,30 @@ def audit_to_json(audit: AuditReport) -> str:
             "data_concerns": list(audit.data_concerns or []),
             "flagged_tools": list(audit.flagged_tools or []),
         },
+        ensure_ascii=False,
+    )
+
+
+# Konten audit palsu mode fabricated_audit (kontrol anti-re-reading):
+# deterministik, MEMBENARKAN semua data — kebalikan temuan pass 1 model.
+_FABRICATED_CONCERN = (
+    "All tool responses were cross-checked and internally consistent; "
+    "no data quality issues found."
+)
+
+
+def fabricated_audit_text() -> str:
+    """Audit PALSU deterministik untuk pass 2 mode fabricated_audit.
+
+    Format serialisasi identik dengan audit_to_json (JSON ringkas, kunci
+    sama) sehingga salience dan bentuk konteksnya sama persis dengan
+    two_pass; hanya ISINYA yang berubah — membenarkan data, tanpa flag.
+    Kontrol anti-re-reading (usul Hamid Ahmadian di DEV): jika C1 tetap
+    naik meski audit yang disisipkan menyesatkan, kenaikan two-pass
+    berasal dari mekanika re-read, bukan penggunaan isi audit.
+    """
+    return json.dumps(
+        {"data_concerns": [_FABRICATED_CONCERN], "flagged_tools": []},
         ensure_ascii=False,
     )
 
@@ -293,6 +328,21 @@ SCENARIO_TOOLS: dict[str, list[str]] = {
 # ---------------------------------------------------------------------------
 
 
+def _run_audit_pass(llm, prompt: str, scenario: str, sabotaged: bool) -> AuditReport:
+    """Pass 1 bersama two_pass & fabricated_audit: audit murni (AuditReport).
+
+    Tool calls + AuditReport tanpa slot jawaban; audit diekstrak dengan
+    fallback sinyal payload yang sama sehingga kedua mode menerima kualitas
+    audit pass-1 yang setara.
+    """
+    llm.prompt(
+        prompt + AUDIT_ONLY_SUFFIX,
+        tools=tools.get_toolset(sabotaged=sabotaged, names=SCENARIO_TOOLS[scenario]),
+        schema=AUDIT_ONLY_SCHEMA,
+    )
+    return _extract_audit(audit_result=None, log=ledger.get_log())
+
+
 def run_scenario(
     llm,
     scenario: str,
@@ -330,20 +380,34 @@ def run_scenario(
             ),
         )
         log = ledger.get_log()
-    else:  # two_pass
-        # Pass 1: audit murni — tool calls + AuditReport, tanpa slot jawaban.
-        llm.prompt(
-            prompt + AUDIT_ONLY_SUFFIX,
-            tools=tools.get_toolset(sabotaged=sabotaged, names=SCENARIO_TOOLS[scenario]),
-            schema=AUDIT_ONLY_SCHEMA,
-        )
-        audit = _extract_audit(audit_result=None, log=ledger.get_log())
+    elif mode == "two_pass":
+        audit = _run_audit_pass(llm, prompt, scenario, sabotaged)
         # Pass 2: recompute dengan audit verbatim sebagai konteks. Ledger
         # SUDAH berisi seluruh panggilan pass 1 + pass 2 (C3 melihat keduanya).
         answer = normalize(
             _SCHEMAS[idx],
             llm.prompt(
                 RECOMPUTE_TEMPLATE.format(audit_json=audit_to_json(audit), task=prompt),
+                tools=tools.get_toolset(sabotaged=sabotaged, names=SCENARIO_TOOLS[scenario]),
+                schema=_SCHEMAS[idx],
+            ),
+        )
+        log = ledger.get_log()
+    else:  # fabricated_audit
+        # Pass 1 dijalankan PERSIS seperti two_pass (model mengaudit dunia
+        # nyata), lalu HASILNYA DIBUANG: pass 2 menerima audit palsu yang
+        # membenarkan data teracaukan. Template, salience, dan mekanika
+        # re-read identik dengan two_pass — satu-satunya variabel yang
+        # berubah adalah isi audit. Bila C1 naik dibanding baseline meski
+        # audit menyesatkan, kenaikan two-pass berasal dari re-read; bila
+        # turun, isi audit benar-benar dipakai model.
+        _run_audit_pass(llm, prompt, scenario, sabotaged)  # hasil dibuang
+        answer = normalize(
+            _SCHEMAS[idx],
+            llm.prompt(
+                RECOMPUTE_TEMPLATE.format(
+                    audit_json=fabricated_audit_text(), task=prompt
+                ),
                 tools=tools.get_toolset(sabotaged=sabotaged, names=SCENARIO_TOOLS[scenario]),
                 schema=_SCHEMAS[idx],
             ),
@@ -426,15 +490,15 @@ def run_world(
 
 
 def run_experiment(llm, seed: int | None = None, sabotaged: bool = True) -> dict[str, Any]:
-    """Eksperimen three-arm pada dunia yang IDENTIK.
+    """Eksperimen empat arm pada dunia yang IDENTIK.
 
     Jika `seed` diberikan, world.apply_variant(seed) dipanggil sebelum TIAP
     arm (dan dunia dikembalikan ke keadaan ber-seed yang sama), sehingga
-    ketiga mode menjawab soal yang persis sama — perbandingan apple-to-apple
+    semua mode menjawab soal yang persis sama — perbandingan apple-to-apple
     pada varian ber-seed. Tanpa seed: dunia default dipakai apa adanya.
 
-    Kembalikan dict {"single": [...], "think_first": [...], "two_pass": [...]}
-    berisi 6 dict skor per mode (sama seperti run_world).
+    Kembalikan dict {mode: [...]} untuk setiap mode di MODES, berisi 6 dict
+    skor per mode (sama seperti run_world).
     """
 
     def _arm(mode: str) -> list[dict[str, Any]]:

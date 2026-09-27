@@ -11,7 +11,10 @@ Struktur:
   - Dua task eksperimen "verify-then-recompute" (dari diskusi DEV):
     `sabotaged_tools_think_first` (kontrol single-pass + think step by step)
     dan `sabotaged_tools_two_pass` (pass 1 audit murni, pass 2 recompute
-    dengan audit sebagai konteks). Logika eksekusi ada di scenarios.py.
+    dengan audit sebagai konteks), plus `sabotaged_tools_fabricated_audit`
+    (kontrol anti-re-reading: pass 2 menerima audit PALSU deterministik
+    yang membenarkan data — usul Hamid Ahmadian). Logika eksekusi ada di
+    scenarios.py.
 
 Prompt dibangun DINAMIS dari data world.py (di scenarios.py) sehingga varian
 ber-seed (world.apply_variant(seed)) otomatis mengubah soal tanpa menyentuh
@@ -50,7 +53,12 @@ SCENARIO_NAMES = scenarios.SCENARIO_NAMES
 # Dunia jujur tetap pakai suffix "_honest" di belakang nama skenario.
 LAST_RESULTS: dict[str, dict[str, Any]] = {}
 
-_MODE_PREFIX = {"single": "", "think_first": "think_first::", "two_pass": "two_pass::"}
+_MODE_PREFIX = {
+    "single": "",
+    "think_first": "think_first::",
+    "two_pass": "two_pass::",
+    "fabricated_audit": "fabricated_audit::",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +133,8 @@ def print_breakdown(mode: str = "single") -> None:
     prefix = _MODE_PREFIX[mode]
     title = {"single": "single-pass (baseline leaderboard)",
              "think_first": "think_first (kontrol: 1 pass + think step by step)",
-             "two_pass": "two_pass (audit -> recompute)"}[mode]
+             "two_pass": "two_pass (audit -> recompute)",
+             "fabricated_audit": "fabricated_audit (kontrol anti-re-reading: audit palsu)"}[mode]
     print(f"== {title} ==")
     if not any(prefix + n + s in LAST_RESULTS
                for n in SCENARIO_NAMES for s in ("", "_honest")):
@@ -248,6 +257,26 @@ def sabotaged_tools_two_pass_task(llm) -> tuple[int, int]:
     per_scenario: dict[str, Any] = {}
     for name, runner in _CORE_RUNNERS.items():
         points, max_points = runner(llm, sabotaged=True, mode="two_pass")
+        per_scenario[name] = {"points": points, "max": max_points}
+        total += points
+    return total, 36
+
+
+@kbench.task(name="sabotaged_tools_fabricated_audit")
+def sabotaged_tools_fabricated_audit_task(llm) -> tuple[int, int]:
+    """KONTROL anti-re-reading: struktur two_pass, audit pass 1 DIBUANG dan
+    diganti audit PALSU deterministik yang membenarkan data teracaukan.
+
+    Pasangan dua_pass: template & salience identik, satu-satunya variabel
+    yang berubah adalah isi audit. Jika C1 tetap naik dibanding baseline
+    meski auditnya menyesatkan, kenaikan two-pass berasal dari mekanika
+    re-read, bukan isi audit; jika C1 turun, isi audit benar-benar dipakai
+    model. Baseline perbandingan: sabotaged_tools_task (dunia identik).
+    """
+    total = 0
+    per_scenario: dict[str, Any] = {}
+    for name, runner in _CORE_RUNNERS.items():
+        points, max_points = runner(llm, sabotaged=True, mode="fabricated_audit")
         per_scenario[name] = {"points": points, "max": max_points}
         total += points
     return total, 36

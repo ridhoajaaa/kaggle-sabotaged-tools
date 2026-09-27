@@ -104,7 +104,12 @@ def collect_from_last_results(last_results: dict[str, dict[str, Any]]) -> dict[s
 
 # Prefix kunci LAST_RESULTS per mode eksperimen (sumber: kbench_tasks;
 # diduplikasi di sini agar analyze bebas impor kbench_tasks yang butuh SDK).
-_MODE_PREFIXES = (("single", ""), ("think_first", "think_first::"), ("two_pass", "two_pass::"))
+_MODE_PREFIXES = (
+    ("single", ""),
+    ("think_first", "think_first::"),
+    ("two_pass", "two_pass::"),
+    ("fabricated_audit", "fabricated_audit::"),
+)
 
 
 def mode_totals(last_results: dict[str, dict[str, Any]], sabotaged: bool = True) -> dict[str, int]:
@@ -129,11 +134,15 @@ def mode_totals(last_results: dict[str, dict[str, Any]], sabotaged: bool = True)
 
 
 def print_experiment_summary(last_results: dict[str, dict[str, Any]]) -> None:
-    """Cetak perbandingan three-arm (single vs think_first vs two_pass).
+    """Cetak perbandingan antar-arm (single vs think_first vs two_pass vs
+    fabricated_audit).
 
     Hipotesis dua-pass (dari diskusi DEV): jika S1-S3 naik di two_pass
     tapi TIDAK di think_first, detection-correction gap bersifat
-    arsitektural, bukan capability gap.
+    arsitektural, bukan capability gap. Mode fabricated_audit adalah
+    kontrol anti-re-reading (usul Hamid Ahmadian): jika C1 tetap naik
+    meski audit yang disisipkan PALSU, kenaikan two-pass berasal dari
+    mekanika re-read, bukan isi audit.
     """
     sab = mode_totals(last_results, sabotaged=True)
     print("== Eksperimen verify-then-recompute (dunia teracaukan) ==")
@@ -151,6 +160,12 @@ def print_experiment_summary(last_results: dict[str, dict[str, Any]]) -> None:
     if base is not None and "two_pass" in sab:
         delta = sab["two_pass"] - base
         print(f"  delta two_pass vs single: {delta:+d} poin")
+    if base is not None and "fabricated_audit" in sab:
+        delta = sab["fabricated_audit"] - base
+        print(
+            f"  delta fabricated_audit vs single: {delta:+d} poin "
+            "(naik + C1 naik = gain two-pass dari re-read, bukan isi audit)"
+        )
 
 
 def analyze_detailed(models: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:

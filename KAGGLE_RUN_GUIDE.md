@@ -3,7 +3,8 @@
 > Tujuan: menjalankan task utama (dunia teracaukan) + kontrol kalibrasi (dunia jujur)
 > dengan model pilihan Anda, lalu mengambil angka untuk mengisi `[FILL: ...]` di
 > `DEV_SUBMISSION_DRAFT.md`. Perkiraan durasi per model: 5–15 menit (~12 prompt LLM).
-> Plus eksperimen three-arm: +2 task ≈ +24 prompt LLM per model.
+> Plus eksperimen empat-arm: +3 task ≈ +36 prompt LLM per model (two_pass &
+> fabricated_audit menjalankan 2 pass per skenario).
 
 ## 0. Prasyarat
 - Akun Kaggle **terverifikasi telepon** (syarat untuk memilih model LLM di notebook).
@@ -28,7 +29,7 @@
 1. **Sel 1**: menulis paket ke `/kaggle/working/sabotaged_tools` (selalu jalan duluan).
 2. **Sel 2**: guard instalasi SDK → impor task → `sabotaged_tools_task.run()` →
    `print_breakdown()` → `sabotaged_tools_calibration_task.run()` → `print_breakdown()`
-   → **eksperimen three-arm** (`think_first` lalu `two_pass`) →
+   → **eksperimen empat-arm** (`think_first` → `two_pass` → `fabricated_audit`) →
    `print_experiment_summary(LAST_RESULTS)`.
    Anda akan melihat agen memanggil tool; biarkan sampai selesai (jangan interupsi).
 3. Baca tabel breakdown yang tercetak — itulah bahan angka artikel:
@@ -42,11 +43,19 @@
    TOTAL [jujur]                      yy/36
 
    == Eksperimen verify-then-recompute (dunia teracaukan) ==
-     single       total xx/36   (S1-S3: x/18)
-     think_first  total xx/36   (S1-S3: x/18)
-     two_pass     total xx/36   (S1-S3: x/18)
+     single            total xx/36   (S1-S3: x/18)
+     think_first       total xx/36   (S1-S3: x/18)
+     two_pass          total xx/36   (S1-S3: x/18)
+     fabricated_audit  total xx/36   (S1-S3: x/18)
      delta two_pass vs single: +N poin
+     delta fabricated_audit vs single: +N poin ...
    ```
+
+   Bacaan `fabricated_audit` (kontrol anti-re-reading, usul Hamid Ahmadian):
+   pass 2 menerima audit PALSU yang membenarkan data. Jika C1 two_pass naik
+   TAPI C1 fabricated_audit juga naik → gain berasal dari mekanika re-read,
+   bukan isi audit. Jika C1 fabricated_audit tidak naik (atau turun) → isi
+   audit benar-benar dipakai model.
 
 4. **Sel terakhir**: `%choose sabotaged_tools_task` — WAJIB dijalankan setelah run
    agar task utama yang terdaftar di leaderboard (bukan task per-skenario).
@@ -91,15 +100,16 @@ gunakan **Add Models** untuk menjadwalkan model lain pada task yang sama.
 
 ## 6. Kontrol kalibrasi & varian (untuk artikel)
 - `sabotaged_tools_calibration_task` sudah berjalan di sel 2 (dunia jujur, C2 murni).
-- Eksperimen three-arm (`sabotaged_tools_think_first_task`,
-  `sabotaged_tools_two_pass_task`) juga sudah berjalan di sel 2 — outputnya
-  diringkas `print_experiment_summary`. Baseline pembandingnya adalah run
-  `sabotaged_tools_task` yang sudah ada di run yang sama (dunia default identik).
+- Eksperimen empat-arm (`sabotaged_tools_think_first_task`,
+  `sabotaged_tools_two_pass_task`, `sabotaged_tools_fabricated_audit_task`)
+  juga sudah berjalan di sel 2 — outputnya diringkas `print_experiment_summary`.
+  Baseline pembandingnya adalah run `sabotaged_tools_task` yang sudah ada di
+  run yang sama (dunia default identik).
   Tabel hasilnya = bahan seksi "Update: a reader's hypothesis, tested" artikel DEV.
 - Opsional, untuk bagian "robustness" artikel: sebelum sel run, eksekusi
   `world.apply_variant(7)` (atau seed lain) lalu jalankan ulang task — soal
-  berubah total, skor agen teliti tetap harus 36/36. Untuk eksperimen three-arm
-  pada varian ber-seed: `world.apply_variant(7)` lalu jalankan ketiga task
+  berubah total, skor agen teliti tetap harus 36/36. Untuk eksperimen empat-arm
+  pada varian ber-seed: `world.apply_variant(7)` lalu jalankan semua task mode
   berturut-turut (baseline single-pass boleh diwakili run terpisah asal seed sama).
 - Catatan: leaderboard kbench hanya mendukung **satu task per notebook**. Task
   kalibrasi/eksperimen tetap valid sebagai data artikel; jika ingin leaderboard-nya
